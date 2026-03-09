@@ -1546,9 +1546,12 @@ function goPage(id) {
 // ═══════════════════════════════
 // UTILS
 // ═══════════════════════════════
-function fmtMoney(v, cur='BRL') {
-  if(!v||v==='0') return '—';
-  return `R$ ${parseFloat(v).toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+function fmtMoney(v, cur) {
+  if(!v||v==='0'||v===0) return '—';
+  const currency = cur || DATA.account.currency || 'USD';
+  const symbol = currency==='BRL'?'R$ ':currency==='EUR'?'€ ':currency==='GBP'?'£ ':'$ ';
+  const locale = currency==='BRL'?'pt-BR':'en-US';
+  return symbol + parseFloat(v).toLocaleString(locale,{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function fmtNum(v) {
   if(!v||v==='0') return '0';
