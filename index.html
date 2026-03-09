@@ -493,6 +493,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       <div class="sb-section">Inteligência</div>
       <button class="nav-item" onclick="goPage('ai')"><span class="icon">🤖</span> Análise IA</button>
       <button class="nav-item" onclick="goPage('alerts')"><span class="icon">🔔</span> Alertas</button>
+      <button class="nav-item" onclick="goPage('demographics')"><span class="icon">📋</span> Relatório Completo</button>
     </div>
     <div class="sb-footer">
       <div class="acct-pill" id="sb-acct">—</div>
@@ -750,6 +751,58 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
       <div class="card full">
         <div class="card-head"><div class="card-title">Resumo de Saúde da Conta</div></div>
         <div class="card-body" id="health-body"></div>
+      </div>
+    </div>
+
+  <!-- PAGE: DEMOGRAPHICS -->
+    <div class="page" id="page-demographics">
+      <div class="ai-panel" id="demo-ai-panel">
+        <div class="ai-header">
+          <div class="ai-icon">📋</div>
+          <div>
+            <h3>Relatório Completo de Otimização</h3>
+            <p>Análise detalhada por idade, sexo, país, idioma e recomendações de melhoria</p>
+          </div>
+        </div>
+        <div class="ai-content" id="demo-ai-content">
+          <div style="color:var(--text3)">Clique em "Gerar Relatório" para analisar seus dados demográficos e receber recomendações detalhadas.</div>
+        </div>
+        <button class="ai-btn" onclick="runDemoReport()">📋 Gerar Relatório Completo</button>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Performance por Idade</div></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-age"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Performance por Sexo</div></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-gender"></canvas></div></div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Top Países por Cliques</div></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-country"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Performance por Região</div></div>
+          <div class="card-body"><div class="chart-wrap"><canvas id="chart-region"></canvas></div></div>
+        </div>
+      </div>
+      <div class="card full">
+        <div class="card-head"><div class="card-title">Tabela Detalhada por Idade e Sexo</div></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Segmento</th><th>Impressões</th><th>Cliques</th><th>CTR</th><th>Gasto</th><th>CPC</th><th>Avaliação</th></tr></thead>
+          <tbody id="demo-age-tbody"></tbody>
+        </table></div>
+      </div>
+      <div class="card full">
+        <div class="card-head"><div class="card-title">Tabela Detalhada por País</div></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>País</th><th>Impressões</th><th>Cliques</th><th>CTR</th><th>Gasto</th><th>CPC</th><th>Avaliação</th></tr></thead>
+          <tbody id="demo-country-tbody"></tbody>
+        </table></div>
       </div>
     </div>
 
@@ -1479,7 +1532,7 @@ function formatAIText(text) {
 const pageTitles = {
   overview:'Visão Geral',campaigns:'Campanhas',adsets:'Conjuntos de Anúncios',
   ads:'Anúncios',performance:'Análise de Performance',audience:'Análise de Público',
-  budget:'Orçamento',ai:'Análise com IA',alerts:'Alertas & Saúde'
+  budget:'Orçamento',ai:'Análise com IA',alerts:'Alertas & Saúde',demographics:'Relatório Completo de Otimização'
 };
 function goPage(id) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1530,6 +1583,177 @@ function doLogout() {
   document.getElementById('inp-acct').value='';
   document.getElementById('btn-connect').disabled=false;
 }
+// ═══════════════════════════════
+// DEMOGRAPHICS
+// ═══════════════════════════════
+let DEMO_DATA = { age:[], gender:[], country:[], region:[] };
+
+async function loadDemographics() {
+  if(!TOKEN || !ACCT) return;
+  try {
+    // Age & gender breakdown
+    const ageR = await api(`${ACCT}/insights`,{
+      fields:'impressions,clicks,spend,ctr,cpc',
+      date_preset: PERIOD,
+      breakdowns:'age,gender',
+      level:'account',
+      limit:100
+    });
+    DEMO_DATA.age = ageR.data || [];
+
+    // Country breakdown
+    const countryR = await api(`${ACCT}/insights`,{
+      fields:'impressions,clicks,spend,ctr,cpc',
+      date_preset: PERIOD,
+      breakdowns:'country',
+      level:'account',
+      limit:100
+    });
+    DEMO_DATA.country = countryR.data || [];
+
+    // Region breakdown
+    const regionR = await api(`${ACCT}/insights`,{
+      fields:'impressions,clicks,spend,ctr,cpc',
+      date_preset: PERIOD,
+      breakdowns:'region',
+      level:'account',
+      limit:50
+    });
+    DEMO_DATA.region = regionR.data || [];
+
+    renderDemographics();
+  } catch(e) {
+    console.error('Demographics error:', e);
+  }
+}
+
+function renderDemographics() {
+  const cur = DATA.account.currency || 'USD';
+
+  // Age chart
+  const ageMap = {};
+  DEMO_DATA.age.forEach(d => {
+    const age = d.age || 'N/A';
+    if(!ageMap[age]) ageMap[age] = {clicks:0,impressions:0,spend:0};
+    ageMap[age].clicks += parseInt(d.clicks||0);
+    ageMap[age].impressions += parseInt(d.impressions||0);
+    ageMap[age].spend += parseFloat(d.spend||0);
+  });
+  const ageKeys = Object.keys(ageMap).sort();
+  mkChart('chart-age','bar',ageKeys,[
+    {label:'Cliques',data:ageKeys.map(k=>ageMap[k].clicks),backgroundColor:'rgba(67,97,238,0.7)',yAxisID:'y'},
+    {label:'CTR %',data:ageKeys.map(k=>ageMap[k].impressions>0?(ageMap[k].clicks/ageMap[k].impressions*100).toFixed(2):0),type:'line',borderColor:'#06d6a0',yAxisID:'y1',tension:.3}
+  ],{scales:{y:{position:'left',grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#606080'}},y1:{position:'right',grid:{drawOnChartArea:false},ticks:{color:'#606080'}}}});
+
+  // Gender chart
+  const genderMap = {};
+  DEMO_DATA.age.forEach(d => {
+    const g = d.gender==='male'?'Masculino':d.gender==='female'?'Feminino':'Outro';
+    if(!genderMap[g]) genderMap[g] = {clicks:0,spend:0,impressions:0};
+    genderMap[g].clicks += parseInt(d.clicks||0);
+    genderMap[g].spend += parseFloat(d.spend||0);
+    genderMap[g].impressions += parseInt(d.impressions||0);
+  });
+  mkChart('chart-gender','doughnut',Object.keys(genderMap),[
+    {data:Object.values(genderMap).map(v=>v.clicks),backgroundColor:['#4361ee','#f7b2d9','#06d6a0'],borderWidth:0}
+  ],{plugins:{legend:{position:'bottom',labels:{color:'#a0a0c0',boxWidth:10}}}});
+
+  // Country chart
+  const topCountries = [...DEMO_DATA.country].sort((a,b)=>parseInt(b.clicks||0)-parseInt(a.clicks||0)).slice(0,10);
+  mkChart('chart-country','bar',topCountries.map(d=>d.country||'N/A'),[
+    {label:'Cliques',data:topCountries.map(d=>parseInt(d.clicks||0)),backgroundColor:'rgba(123,47,247,0.7)'}
+  ],{indexAxis:'y',plugins:{legend:{display:false}}});
+
+  // Region chart
+  const topRegions = [...DEMO_DATA.region].sort((a,b)=>parseInt(b.clicks||0)-parseInt(a.clicks||0)).slice(0,8);
+  mkChart('chart-region','bar',topRegions.map(d=>d.region||'N/A'),[
+    {label:'Cliques',data:topRegions.map(d=>parseInt(d.clicks||0)),backgroundColor:'rgba(6,214,160,0.7)'}
+  ],{indexAxis:'y',plugins:{legend:{display:false}}});
+
+  // Age/gender table
+  const sortedAge = [...DEMO_DATA.age].sort((a,b)=>parseFloat(b.ctr||0)-parseFloat(a.ctr||0));
+  document.getElementById('demo-age-tbody').innerHTML = sortedAge.map(d=>{
+    const ctr=parseFloat(d.ctr||0);
+    const rating=ctr>3?'<span class="badge badge-green">Excelente</span>':ctr>1.5?'<span class="badge badge-blue">Bom</span>':ctr>0.5?'<span class="badge badge-yellow">Regular</span>':'<span class="badge badge-red">Baixo</span>';
+    const gender=d.gender==='male'?'♂ Masculino':d.gender==='female'?'♀ Feminino':'Outro';
+    return `<tr>
+      <td><strong>${d.age||'N/A'}</strong> — ${gender}</td>
+      <td>${fmtNum(d.impressions)}</td>
+      <td>${fmtNum(d.clicks)}</td>
+      <td>${fmtPct(d.ctr)}</td>
+      <td>${fmtMoney(d.spend,cur)}</td>
+      <td>${fmtMoney(d.cpc,cur)}</td>
+      <td>${rating}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty">Sem dados demográficos disponíveis</td></tr>';
+
+  // Country table
+  const sortedCountry = [...DEMO_DATA.country].sort((a,b)=>parseFloat(b.ctr||0)-parseFloat(a.ctr||0));
+  document.getElementById('demo-country-tbody').innerHTML = sortedCountry.map(d=>{
+    const ctr=parseFloat(d.ctr||0);
+    const rating=ctr>3?'<span class="badge badge-green">Excelente</span>':ctr>1.5?'<span class="badge badge-blue">Bom</span>':ctr>0.5?'<span class="badge badge-yellow">Regular</span>':'<span class="badge badge-red">Baixo</span>';
+    return `<tr>
+      <td><strong>${d.country||'N/A'}</strong></td>
+      <td>${fmtNum(d.impressions)}</td>
+      <td>${fmtNum(d.clicks)}</td>
+      <td>${fmtPct(d.ctr)}</td>
+      <td>${fmtMoney(d.spend,cur)}</td>
+      <td>${fmtMoney(d.cpc,cur)}</td>
+      <td>${rating}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" class="empty">Sem dados por país disponíveis</td></tr>';
+}
+
+async function runDemoReport() {
+  const btn = document.querySelector('#demo-ai-panel .ai-btn');
+  btn.disabled = true;
+  document.getElementById('demo-ai-content').innerHTML = '<div class="ai-loading"><div class="ai-dots"><span></span><span></span><span></span></div> Analisando dados demográficos...</div>';
+
+  // Load demographics first
+  await loadDemographics();
+
+  // Build demographics summary
+  const ageMap = {};
+  DEMO_DATA.age.forEach(d=>{
+    const key=`${d.age} ${d.gender==='male'?'M':'F'}`;
+    ageMap[key]={ctr:parseFloat(d.ctr||0),spend:parseFloat(d.spend||0),clicks:parseInt(d.clicks||0)};
+  });
+  const topAge = Object.entries(ageMap).sort((a,b)=>b[1].ctr-a[1].ctr).slice(0,5).map(([k,v])=>`${k}: CTR ${v.ctr.toFixed(2)}%`).join(', ');
+  const topCountries = [...DEMO_DATA.country].sort((a,b)=>parseFloat(b.ctr||0)-parseFloat(a.ctr||0)).slice(0,5).map(d=>`${d.country}: CTR ${parseFloat(d.ctr||0).toFixed(2)}%`).join(', ');
+  const summary = buildDataSummary() + `
+
+DEMOGRÁFICOS:
+Melhor performance por idade/sexo: ${topAge}
+Melhor performance por país: ${topCountries}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system:`Você é um especialista sênior em Meta Ads. Analise os dados demográficos e de campanha e forneça um relatório profissional em português com:
+1. **Melhores segmentos de idade e sexo** para investir mais
+2. **Piores segmentos** para excluir ou reduzir investimento
+3. **Melhores países/regiões** com maior potencial
+4. **Recomendações específicas** de segmentação para melhorar CTR e reduzir CPC
+5. **Ações imediatas** com prioridade alta/média/baixa
+Use emojis, seja direto e específico com números. Máximo 500 palavras.`,
+        messages:[{role:'user',content:`Gere o relatório completo de otimização:
+
+${summary}`}]
+      })
+    });
+    const d = await res.json();
+    const text = d.content?.[0]?.text || 'Erro ao gerar relatório.';
+    document.getElementById('demo-ai-content').innerHTML = formatAIText(text);
+  } catch(e) {
+    document.getElementById('demo-ai-content').innerHTML = `<span style="color:var(--red)">Erro: ${e.message}</span>`;
+  }
+  btn.disabled = false;
+}
+
 document.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&document.getElementById('login-screen').style.display!=='none') doConnect();
 });
