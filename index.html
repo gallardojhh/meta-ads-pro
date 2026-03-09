@@ -456,8 +456,8 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <select id="inp-period">
           <option value="today">Hoje</option>
           <option value="yesterday">Ontem</option>
-          <option value="last_7_d" selected>Últimos 7 dias</option>
-          <option value="last_30_d">Últimos 30 dias</option>
+          <option value="last_7d" selected>Últimos 7 dias</option>
+          <option value="last_30d">Últimos 30 dias</option>
           <option value="this_month">Este mês</option>
           <option value="last_month">Mês passado</option>
         </select>
@@ -508,8 +508,8 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
         <select class="period-select" id="sel-period" onchange="reloadData()">
           <option value="today">Hoje</option>
           <option value="yesterday">Ontem</option>
-          <option value="last_7_d" selected>Últimos 7 dias</option>
-          <option value="last_30_d">Últimos 30 dias</option>
+          <option value="last_7d" selected>Últimos 7 dias</option>
+          <option value="last_30d">Últimos 30 dias</option>
           <option value="this_month">Este mês</option>
           <option value="last_month">Mês passado</option>
         </select>
@@ -760,7 +760,7 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
 // ═══════════════════════════════
 // STATE
 // ═══════════════════════════════
-let TOKEN='', ACCT='', PERIOD='last_7_d';
+let TOKEN='', ACCT='', PERIOD='last_7d';
 let DATA = { account:{}, insights:[], campaigns:[], adsets:[], ads:[], dailyInsights:[] };
 let charts = {};
 let campFilter = 'ALL';
