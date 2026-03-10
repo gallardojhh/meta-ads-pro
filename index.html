@@ -443,10 +443,49 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
     <div class="login-card">
       <h2>Conectar conta</h2>
       <p>Insira suas credenciais da API do Meta para acessar o dashboard completo de performance.</p>
-      <div class="field">
-        <label>Access Token</label>
-        <input type="password" id="inp-token" placeholder="EAAxxxxxxxxxxxxxxxx..."/>
+
+      <!-- TABS -->
+      <div class="tab-row" style="margin-bottom:20px;width:100%;">
+        <button class="tab-btn on" id="tab-short" onclick="switchTab('short')">Token Temporário</button>
+        <button class="tab-btn" id="tab-long" onclick="switchTab('long')">🔒 Token 60 Dias</button>
       </div>
+
+      <!-- TAB: SHORT (normal) -->
+      <div id="tab-short-content">
+        <div class="field">
+          <label>Access Token (Graph Explorer)</label>
+          <input type="password" id="inp-token" placeholder="EAAxxxxxxxxxxxxxxxx..."/>
+        </div>
+      </div>
+
+      <!-- TAB: LONG LIVED -->
+      <div id="tab-long-content" style="display:none">
+        <div class="hint-box" style="margin-bottom:16px;background:rgba(6,214,160,0.06);border-color:rgba(6,214,160,0.2);">
+          <div style="font-size:18px;flex-shrink:0">⏳</div>
+          <p style="color:#06d6a0">Token de longa duração dura <strong>60 dias</strong>. Você precisará do App ID e App Secret do seu app no Meta.</p>
+        </div>
+        <div class="field">
+          <label>Token Curto (Graph Explorer)</label>
+          <input type="password" id="inp-short-token" placeholder="EAAxxxxxxxxxxxxxxxx..."/>
+        </div>
+        <div class="field">
+          <label>App ID</label>
+          <input type="text" id="inp-app-id" placeholder="123456789012345"/>
+        </div>
+        <div class="field">
+          <label>App Secret</label>
+          <input type="password" id="inp-app-secret" placeholder="abcdef1234567890abcdef1234567890"/>
+        </div>
+        <button class="btn-primary" style="background:linear-gradient(135deg,#06d6a0,#4361ee);margin-bottom:12px;" onclick="getLongToken()">🔄 Gerar Token 60 Dias</button>
+        <div id="long-token-result" style="display:none;margin-bottom:12px;">
+          <div class="field">
+            <label>✅ Token Longa Duração Gerado</label>
+            <input type="text" id="inp-token" placeholder="Token gerado aparece aqui..." readonly style="background:rgba(6,214,160,0.08);border-color:rgba(6,214,160,0.3);font-size:11px;"/>
+          </div>
+          <div id="token-expiry" style="font-size:11px;color:#06d6a0;margin-bottom:8px;"></div>
+        </div>
+      </div>
+
       <div class="field">
         <label>ID da Conta de Anúncios</label>
         <input type="text" id="inp-acct" placeholder="1234567890 ou act_1234567890"/>
@@ -462,11 +501,18 @@ tbody tr:hover{background:rgba(255,255,255,0.02);}
           <option value="last_month">Mês passado</option>
         </select>
       </div>
+
+      <!-- Save credentials checkbox -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <input type="checkbox" id="chk-save" style="width:16px;height:16px;accent-color:#4361ee;cursor:pointer;"/>
+        <label for="chk-save" style="font-size:12px;color:var(--text2);cursor:pointer;">Lembrar credenciais neste dispositivo</label>
+      </div>
+
       <button class="btn-primary" id="btn-connect" onclick="doConnect()">Conectar ao Dashboard →</button>
       <div class="err" id="login-err"></div>
       <div class="hint-box">
         <div style="font-size:18px;flex-shrink:0">🔐</div>
-        <p>Token usado somente para chamadas diretas à API do Meta no seu navegador. Não é armazenado. Gere em <a href="https://developers.facebook.com/tools/explorer/" target="_blank">Graph Explorer</a> com permissões <strong>ads_read</strong> e <strong>ads_management</strong>.</p>
+        <p>Token usado somente para chamadas diretas à API do Meta. Gere em <a href="https://developers.facebook.com/tools/explorer/" target="_blank">Graph Explorer</a> com permissões <strong>ads_read</strong> e <strong>ads_management</strong>. App ID e Secret em <a href="https://developers.facebook.com/apps/" target="_blank">developers.facebook.com/apps</a>.</p>
       </div>
     </div>
   </div>
@@ -850,6 +896,57 @@ async function apiAll(path, params={}) {
 // ═══════════════════════════════
 // CONNECT
 // ═══════════════════════════════
+function switchTab(t) {
+  document.getElementById('tab-short-content').style.display = t==='short'?'block':'none';
+  document.getElementById('tab-long-content').style.display = t==='long'?'block':'none';
+  document.getElementById('tab-short').className = 'tab-btn'+(t==='short'?' on':'');
+  document.getElementById('tab-long').className = 'tab-btn'+(t==='long'?' on':'');
+}
+
+async function getLongToken() {
+  const shortToken = document.getElementById('inp-short-token').value.trim();
+  const appId = document.getElementById('inp-app-id').value.trim();
+  const appSecret = document.getElementById('inp-app-secret').value.trim();
+  if(!shortToken||!appId||!appSecret){ showErr('Preencha token, App ID e App Secret.'); return; }
+  try {
+    load('Gerando token de longa duração...');
+    const r = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortToken}`);
+    const d = await r.json();
+    unload();
+    if(d.error) throw new Error(d.error.message);
+    const longToken = d.access_token;
+    const expires = d.expires_in ? Math.floor(d.expires_in/86400)+' dias' : '~60 dias';
+    document.getElementById('inp-token').value = longToken;
+    document.getElementById('long-token-result').style.display = 'block';
+    document.getElementById('token-expiry').textContent = `⏳ Expira em: ${expires}`;
+    // Auto-save
+    localStorage.setItem('meta_token', longToken);
+    localStorage.setItem('meta_token_exp', Date.now() + (d.expires_in||5184000)*1000);
+    showErr('✅ Token gerado! Agora preencha o ID da conta e conecte.');
+    document.getElementById('login-err').style.color='#06d6a0';
+  } catch(e) {
+    unload();
+    showErr('Erro ao gerar token: '+e.message);
+  }
+}
+
+// Load saved credentials
+(function loadSaved() {
+  const savedToken = localStorage.getItem('meta_token');
+  const savedAcct = localStorage.getItem('meta_acct');
+  const savedExp = localStorage.getItem('meta_token_exp');
+  if(savedToken && savedExp && Date.now() < parseInt(savedExp)) {
+    document.getElementById('inp-token').value = savedToken;
+    document.getElementById('chk-save').checked = true;
+    const daysLeft = Math.floor((parseInt(savedExp)-Date.now())/86400000);
+    if(daysLeft > 0) {
+      const expEl = document.getElementById('token-expiry');
+      if(expEl) { expEl.textContent = `⏳ Token salvo — expira em ${daysLeft} dias`; expEl.style.display='block'; }
+    }
+  }
+  if(savedAcct) document.getElementById('inp-acct').value = savedAcct;
+})();
+
 async function doConnect() {
   const t = document.getElementById('inp-token').value.trim();
   const a = document.getElementById('inp-acct').value.trim();
@@ -857,6 +954,13 @@ async function doConnect() {
   if(!t||!a){showErr('Preencha todos os campos.');return;}
   TOKEN = t;
   ACCT = a.startsWith('act_') ? a : `act_${a}`;
+  // Save credentials if checkbox checked
+  if(document.getElementById('chk-save')?.checked) {
+    localStorage.setItem('meta_token', t);
+    localStorage.setItem('meta_acct', a);
+    const expIn = 7*24*3600*1000; // default 7 days for short tokens
+    localStorage.setItem('meta_token_exp', Date.now()+expIn);
+  }
   document.getElementById('btn-connect').disabled = true;
   load('Verificando credenciais...');
   try {
@@ -1580,6 +1684,11 @@ function showErr(msg) {
 }
 function doLogout() {
   TOKEN='';ACCT='';
+  if(!document.getElementById('chk-save')?.checked) {
+    localStorage.removeItem('meta_token');
+    localStorage.removeItem('meta_acct');
+    localStorage.removeItem('meta_token_exp');
+  }
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('inp-token').value='';
